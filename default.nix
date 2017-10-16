@@ -12,8 +12,8 @@
 let all-cabal-hashes = fetchFromGitHub {
       owner = "commercialhaskell";
       repo = "all-cabal-hashes";
-      rev = "adb039bba3bb46941c3ee08bdd68f25bf2aa5c60";
-      sha256 = "0mjkrbifag39gm153v5wn555jq7ckwn8s3f1wwsdw67wmql4gcn7";
+      rev = "2b0bf3ddf8b75656582c1e45c51caa59458cd3ad";
+      sha256 = "0zph3siy0fswmgnlqhnkjjg2ji98szm3s1aa7gadvgg8cd8b1jrn";
     };
     nixpkgs = nixpkgsFunc ({
       inherit system;
@@ -33,8 +33,8 @@ let all-cabal-hashes = fetchFromGitHub {
     });
     inherit (nixpkgs) fetchurl fetchgit fetchFromGitHub;
     nixpkgsCross = {
-      android = nixpkgs.lib.mapAttrs (_: args: nixpkgsFunc args) rec {
-        arm64 = {
+      android = nixpkgs.lib.mapAttrs (_: args: if args == null then null else nixpkgsFunc args) rec {
+        arm64 = if system != "x86_64-linux" then null else {
           inherit system;
           crossSystem = {
             config = "aarch64-unknown-linux-android";
@@ -49,11 +49,11 @@ let all-cabal-hashes = fetchFromGitHub {
             inherit all-cabal-hashes;
           };
         };
-        arm64Impure = arm64 // {
+        arm64Impure = if system != "x86_64-linux" then null else arm64 // {
           inherit system;
           crossSystem = arm64.crossSystem // { useAndroidPrebuilt = true; };
         };
-        armv7a = {
+        armv7a = if system != "x86_64-linux" then null else {
           inherit system;
           crossSystem = {
             config = "arm-unknown-linux-androideabi";
@@ -68,7 +68,7 @@ let all-cabal-hashes = fetchFromGitHub {
             inherit all-cabal-hashes;
           };
         };
-        armv7aImpure = armv7a // {
+        armv7aImpure = if system != "x86_64-linux" then null else armv7a // {
           crossSystem = armv7a.crossSystem // { useAndroidPrebuilt = true; };
         };
       };
@@ -113,7 +113,7 @@ let all-cabal-hashes = fetchFromGitHub {
                 inherit all-cabal-hashes;
               };
             };
-        in nixpkgs.lib.mapAttrs (_: args: nixpkgsFunc args) {
+        in nixpkgs.lib.mapAttrs (_: args: if args == null then null else nixpkgsFunc args) {
         simulator64 = {
           inherit system;
           crossSystem = {
@@ -133,7 +133,7 @@ let all-cabal-hashes = fetchFromGitHub {
           };
           inherit config;
         };
-        arm64 = {
+        arm64 = if system != "x86_64-darwin" then null else {
           inherit system;
           crossSystem = {
             useIosPrebuilt = true;
@@ -148,25 +148,6 @@ let all-cabal-hashes = fetchFromGitHub {
             sdkVer = iosSdkVersion;
             useiOSCross = true;
             openssl.system = "ios64-cross";
-            libc = "libSystem";
-          };
-          inherit config;
-        };
-        armv7 = {
-          inherit system;
-          crossSystem = {
-            useIosPrebuilt = true;
-            # You can change config/arch/isiPhoneSimulator depending on your target:
-            # aarch64-apple-darwin14 | arm64  | false
-            # arm-apple-darwin10     | armv7  | false
-            # i386-apple-darwin11    | i386   | true
-            # x86_64-apple-darwin14  | x86_64 | true
-            config = "arm-apple-darwin10";
-            arch = "armv7";
-            isiPhoneSimulator = false;
-            sdkVer = iosSdkVersion;
-            useiOSCross = true;
-            openssl.system = "ios-cross";
             libc = "libSystem";
           };
           inherit config;
@@ -221,12 +202,11 @@ let overrideCabal = pkg: f: if pkg == null then null else haskellLib.overrideCab
     addFastWeakFlag = if useFastWeak
       then drv: enableCabalFlag drv "fast-weak"
       else drv: drv;
-    # The gi-libraries, by default, will use lots of overloading features of ghc that are still a bit too slow; this function disables them
-    dontUseOverloads = p: appendConfigureFlag p "-f-overloaded-methods -f-overloaded-signals -f-overloaded-properties";
     extendHaskellPackages = haskellPackages: makeRecursivelyOverridable haskellPackages {
       overrides = self: super:
         let reflexDom = import ./reflex-dom self nixpkgs;
             jsaddlePkgs = import ./jsaddle self;
+            gargoylePkgs = self.callPackage ./gargoyle self;
             ghcjsDom = import ./ghcjs-dom self;
             addReflexOptimizerFlag = if useReflexOptimizer && (self.ghc.cross or null) == null
               then drv: appendConfigureFlag drv "-fuse-reflex-optimizer"
@@ -285,32 +265,26 @@ let overrideCabal = pkg: f: if pkg == null then null else haskellLib.overrideCab
         ghcjs-dom-jsaddle = dontHaddock ghcjsDom.ghcjs-dom-jsaddle;
         ghcjs-dom = dontHaddock ghcjsDom.ghcjs-dom;
 
+        inherit (gargoylePkgs) gargoyle gargoyle-postgresql;
 
         ########################################################################
         # Tweaks
         ########################################################################
-        gi-atk = dontUseOverloads super.gi-atk;
-        gi-cairo = dontUseOverloads super.gi-cairo;
-        gi-gdk = dontUseOverloads super.gi-gdk;
-        gi-gdkpixbuf = dontUseOverloads super.gi-gdkpixbuf;
-        gi-glib = dontUseOverloads (self.callPackage ./gi-glib.nix {});
-        gi-gio = dontUseOverloads (self.callPackage ./gi-gio.nix {});
-        gi-gtk = dontUseOverloads (self.callPackage ./gi-gtk.nix {
+        gi-glib = self.callPackage ./gi-glib.nix {};
+        gi-gio = self.callPackage ./gi-gio.nix {};
+        gi-gtk = self.callPackage ./gi-gtk.nix {
           gtk3 = nixpkgs.gnome3.gtk;
-        });
-        gi-javascriptcore = dontUseOverloads (self.callPackage ./gi-javascriptcore.nix {});
-        gi-webkit2 = dontUseOverloads (self.callPackage ./gi-webkit2.nix {
+        };
+        gi-javascriptcore = self.callPackage ./gi-javascriptcore.nix {};
+        gi-webkit2 = self.callPackage ./gi-webkit2.nix {
           webkitgtk = nixpkgs.webkitgtk216x;
-        });
-        gi-gobject = dontUseOverloads super.gi-gobject;
-        gi-pango = dontUseOverloads super.gi-pango;
-        gi-soup = dontUseOverloads super.gi-soup;
-        gi-webkit = dontUseOverloads super.gi-webkit;
-        gi-gtksource = dontUseOverloads (super.gi-gtksource.override {
+        };
+        gi-gtksource = super.gi-gtksource.override {
           inherit (nixpkgs.gnome3) gtksourceview;
-        });
+        };
+        ghcjs-base-stub = dontHaddock super.ghcjs-base-stub;
 
-        haskell-gi-overloading = self.callPackage ./haskell-gi-overloading.nix {};
+        haskell-gi-overloading = super.haskell-gi-overloading_0_0;
 
         webkit2gtk3-javascriptcore = super.webkit2gtk3-javascriptcore.override {
           webkitgtk = nixpkgs.webkitgtk216x;
@@ -542,19 +516,20 @@ in let this = rec {
         mv dist/*.tar.gz "$out/${drv.pname}-${drv.version}.tar.gz"
         exit 0
       '';
+      doHaddock = false;
     });
   };
   sdists = mapSet mkSdist ghc;
   mkHackageDocs = pkg: pkg.override {
     mkDerivation = drv: ghc.mkDerivation (drv // {
       postConfigure = ''
-        ./Setup haddock --hoogle --hyperlink-source --html --html-location='/package/${drv.pname}-${drv.version}/docs' --contents-location='/package/${drv.pname}-${drv.version}' --haddock-option=--built-in-themes
+        ./Setup haddock --hoogle --hyperlink-source --html --for-hackage --haddock-option=--built-in-themes
         cd dist/doc/html
-        mv "${drv.pname}" "${drv.pname}-${drv.version}-docs"
         mkdir "$out"
         tar cz --format=ustar -f "$out/${drv.pname}-${drv.version}-docs.tar.gz" "${drv.pname}-${drv.version}-docs"
         exit 0
       '';
+      doHaddock = false;
     });
   };
   hackageDocs = mapSet mkHackageDocs ghc;
