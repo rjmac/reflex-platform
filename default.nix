@@ -10,11 +10,12 @@
 , iosSdkVersion ? "10.2"
 , iosSdkLocation ? "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS${iosSdkVersion}.sdk"
 , iosSupportForce ? false
-, iosSupport ? if system == "x86_64-darwin" && (iosSupportForce || builtins.pathExists iosSdkLocation)
-    then true
-    else builtins.trace "Warning: No iOS sdk found at ${iosSdkLocation}; iOS support disabled.  To enable, either install a version of Xcode that provides that SDK or override the value of iosSdkVersion to match your installed version." false
 }:
-let globalOverlay = self: super: {
+let iosSupport =
+      if system != "x86_64-darwin" then false
+      else if iosSupportForce || builtins.pathExists iosSdkLocation then true
+      else builtins.trace "Warning: No iOS sdk found at ${iosSdkLocation}; iOS support disabled.  To enable, either install a version of Xcode that provides that SDK or override the value of iosSdkVersion to match your installed version." false;
+    globalOverlay = self: super: {
       all-cabal-hashes = super.all-cabal-hashes.override {
         src-spec = {
           owner = "commercialhaskell";
@@ -219,10 +220,10 @@ let overrideCabal = pkg: f: if pkg == null then null else haskellLib.overrideCab
       else drv: drv;
     extendHaskellPackages = haskellPackages: makeRecursivelyOverridable haskellPackages {
       overrides = self: super:
-        let reflexDom = import ./reflex-dom self nixpkgs;
-            jsaddlePkgs = import ./jsaddle self;
-            gargoylePkgs = self.callPackage ./gargoyle self;
-            ghcjsDom = import ./ghcjs-dom self;
+        let reflexDom = import (hackGet ./reflex-dom) self nixpkgs;
+            jsaddlePkgs = import (hackGet ./jsaddle) self;
+            gargoylePkgs = self.callPackage (hackGet ./gargoyle) self;
+            ghcjsDom = import (hackGet ./ghcjs-dom) self;
             addReflexOptimizerFlag = if useReflexOptimizer && (self.ghc.cross or null) == null
               then drv: appendConfigureFlag drv "-fuse-reflex-optimizer"
               else drv: drv;
@@ -258,11 +259,11 @@ let overrideCabal = pkg: f: if pkg == null then null else haskellLib.overrideCab
         ########################################################################
         # Reflex packages
         ########################################################################
-        reflex = addFastWeakFlag (addReflexTraceEventsFlag (addReflexOptimizerFlag (self.callPackage ./reflex {})));
+        reflex = addFastWeakFlag (addReflexTraceEventsFlag (addReflexOptimizerFlag (self.callPackage (hackGet ./reflex) {})));
         reflex-dom = addReflexOptimizerFlag (doJailbreak reflexDom.reflex-dom);
         reflex-dom-core = addReflexOptimizerFlag (doJailbreak reflexDom.reflex-dom-core);
-        reflex-todomvc = self.callPackage ./reflex-todomvc {};
-        reflex-aeson-orphans = self.callPackage ./reflex-aeson-orphans {};
+        reflex-todomvc = self.callPackage (hackGet ./reflex-todomvc) {};
+        reflex-aeson-orphans = self.callPackage (hackGet ./reflex-aeson-orphans) {};
         haven = self.callHackage "haven" "0.2.0.0" {};
 
         inherit (jsaddlePkgs) jsaddle-clib jsaddle-wkwebview jsaddle-webkit2gtk jsaddle-webkitgtk;
@@ -273,7 +274,7 @@ let overrideCabal = pkg: f: if pkg == null then null else haskellLib.overrideCab
           else jsaddlePkgs.jsaddle;
         jsaddle-warp = dontCheck jsaddlePkgs.jsaddle-warp;
 
-        jsaddle-dom = overrideCabal (self.callPackage ./jsaddle-dom {}) (drv: {
+        jsaddle-dom = overrideCabal (self.callPackage (hackGet ./jsaddle-dom) {}) (drv: {
           # On macOS, the jsaddle-dom build will run out of file handles the first time it runs
           preBuild = ''./setup build || true'';
         });
