@@ -77,7 +77,7 @@ in
   #         rev = "a0c5bef18b9609377f20ac6a153a20b7b94578c9";
   #         sha256 = "0vh3hj5rj98d448l647jc6b6q1km4nd4k01s9rajgkc2igigfp6s";
   #       }) {};
-  #     }
+  #     };
 
 , android ? throw "No Android config"
   # ::
@@ -112,8 +112,8 @@ in
 
 }:
 let
-  overrides' = nixpkgs.lib.composeExtensions overrides
-    (self: super: mapAttrs (name: path: self.callCabal2nix name path {}) packages);
+  overrides' = nixpkgs.lib.composeExtensions
+    (self: super: mapAttrs (name: path: self.callCabal2nix name path {}) packages) overrides;
   mkPkgSet = name: _: this.${name}.override { overrides = overrides'; };
 in makeExtensible (prj: mapAttrs mkPkgSet shells // {
   shells = mapAttrs (name: pnames:
