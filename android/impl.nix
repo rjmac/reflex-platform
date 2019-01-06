@@ -35,7 +35,7 @@ in {
     keyStorePassword = releaseKey.storePassword or null;
     mavenDeps = import ./defaults/deps.nix;
     name = applicationId;
-    platformVersions = [ "25" ];
+    platformVersions = [ "26" ];
     release = false;
     src =
       let splitApplicationId = splitString "." applicationId;
