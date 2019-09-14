@@ -29,6 +29,7 @@
     </application>
     <uses-sdk android:minSdkVersion="25" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
     ${permissions}
 </manifest>
 ''

@@ -1,5 +1,7 @@
 package systems.obsidian;
 
+import java.lang.reflect.Method;
+
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
@@ -152,5 +154,28 @@ public class HaskellActivity extends Activity {
                       | View.SYSTEM_UI_FLAG_FULLSCREEN
                       | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     }
+  }
+
+  private Object requestPermissionsResultCallbackObject = null;
+
+  public void setOnRequestPermissionsResultCallback(Object cb) {
+      this.requestPermissionsResultCallbackObject = cb;
+  }
+
+  @Override
+  public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+      boolean result = false;
+      if(requestPermissionsResultCallbackObject != null) {
+          try {
+              Class<?> cls = requestPermissionsResultCallbackObject.getClass();
+              Method m = cls.getMethod("onRequestPermissionsResultCallback", int.class, String[].class, int[].class);
+              result = (Boolean) m.invoke(requestPermissionsResultCallbackObject, requestCode, permissions, grantResults);
+          } catch(RuntimeException e) {
+              throw e;
+          } catch(Exception e) {
+              throw new RuntimeException(e);
+          }
+      }
+      if(!result) super.onRequestPermissionsResult(requestCode, permissions, grantResults);
   }
 }
