@@ -5,6 +5,9 @@ import java.lang.reflect.Method;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import android.os.BatteryManager;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.ViewGroup.LayoutParams;
@@ -72,6 +75,7 @@ public class HaskellActivity extends Activity {
   @Override
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+
     // We can't call finish() in the constructor, as it will have no effect, so
     // we call it here whenever we reach this code without having hit
     // 'continueWithCallbacks'
@@ -157,9 +161,42 @@ public class HaskellActivity extends Activity {
   }
 
   private Object requestPermissionsResultCallbackObject = null;
+  private Method requestPermissionsResultCallbackMethod = null;
+  private Object batteryStatusCallbackObject = null;
+  private Method batteryStatusCallbackMethod = null;
 
   public void setOnRequestPermissionsResultCallback(Object cb) {
-      this.requestPermissionsResultCallbackObject = cb;
+      try {
+          Class<?> cls = cb.getClass();
+          requestPermissionsResultCallbackMethod = cls.getMethod("onRequestPermissionsResultCallback", int.class, String[].class, int[].class);
+          requestPermissionsResultCallbackObject = cb;
+      } catch(Exception e) {
+          throw new RuntimeException(e);
+      }
+  }
+
+  public String setBatteryStatusCallback(Object cb) {
+      try {
+          Class<?> cls = cb.getClass();
+          batteryStatusCallbackMethod = cls.getMethod("onBatteryStatusCallback", boolean.class, float.class);
+          batteryStatusCallbackObject = cb;
+      } catch(Exception e) {
+          throw new RuntimeException(e);
+      }
+
+    IntentFilter filter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+    Intent intent = registerReceiver(powerReceiver, filter);
+
+    int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+    boolean charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+        status == BatteryManager.BATTERY_STATUS_FULL;
+
+    int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+    int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+
+    float pct = level / (float) scale;
+
+    return "{\"charging\": " + charging + ", \"percent\": " + pct + "}";
   }
 
   @Override
@@ -167,9 +204,8 @@ public class HaskellActivity extends Activity {
       boolean result = false;
       if(requestPermissionsResultCallbackObject != null) {
           try {
-              Class<?> cls = requestPermissionsResultCallbackObject.getClass();
-              Method m = cls.getMethod("onRequestPermissionsResultCallback", int.class, String[].class, int[].class);
-              result = (Boolean) m.invoke(requestPermissionsResultCallbackObject, requestCode, permissions, grantResults);
+              result = (Boolean) requestPermissionsResultCallbackMethod.
+                  invoke(requestPermissionsResultCallbackObject, requestCode, permissions, grantResults);
           } catch(RuntimeException e) {
               throw e;
           } catch(Exception e) {
@@ -178,4 +214,34 @@ public class HaskellActivity extends Activity {
       }
       if(!result) super.onRequestPermissionsResult(requestCode, permissions, grantResults);
   }
+
+  private class PowerReceiver extends BroadcastReceiver {
+      @Override
+      public void onReceive(Context context, Intent intent) {
+          go(intent);
+      }
+
+      public void go(Intent intent) {
+          int status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+          boolean charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+              status == BatteryManager.BATTERY_STATUS_FULL;
+
+          int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
+          int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
+
+          float pct = level / (float) scale;
+
+          if(batteryStatusCallbackObject != null) {
+              try {
+                  batteryStatusCallbackMethod.invoke(batteryStatusCallbackObject, charging, pct);
+              } catch(RuntimeException e) {
+                  throw e;
+              } catch(Exception e) {
+                  throw new RuntimeException(e);
+              }
+          }
+      }
+  };
+
+  private final PowerReceiver powerReceiver = new PowerReceiver();
 }
