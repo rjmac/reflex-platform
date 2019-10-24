@@ -12,7 +12,7 @@ buildscript {
         mavenLocal()
     }
     dependencies {
-        classpath 'com.android.tools.build:gradle:2.3.0'
+        classpath 'com.android.tools.build:gradle:3.1.0'
         ${googleServicesClasspath}
     }
 }
@@ -25,8 +25,8 @@ allprojects {
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 26
-    buildToolsVersion '26.0.1'
+    compileSdkVersion 28
+    buildToolsVersion '28.0.3'
 
     sourceSets {
       main {
@@ -40,7 +40,7 @@ android {
     defaultConfig {
         applicationId "${applicationId}"
         minSdkVersion 21
-        targetSdkVersion 26
+        targetSdkVersion 28
         versionCode ${version.code}
         versionName "${version.name}"
     }
@@ -61,6 +61,7 @@ android {
         ${if releaseKey == null then "" else ''
             release {
                 minifyEnabled false
+                zipAlignEnabled true
                 signingConfig signingConfigs.release
             }
           ''

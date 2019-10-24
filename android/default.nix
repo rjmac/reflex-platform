@@ -1,9 +1,10 @@
 env@{
   nixpkgs
 , nixpkgsCross
-, ghcAndroidArm64
-, ghcAndroidArmv7a
+, ghcAndroidAarch64
+, ghcAndroidAarch32
 , overrideCabal
+, acceptAndroidSdkLicenses
 }:
 with nixpkgs.lib.strings;
 let impl = import ./impl.nix env;
@@ -77,6 +78,9 @@ in rec {
 
     , iconPath ? defaultIconPath
 
+    , activityAttributes ? ""
+      # Additional activity attributes like: android:launchMode="singleInstance"
+
     , permissions ? ""
       # Manifest XML for additional permissions
 
@@ -96,8 +100,9 @@ in rec {
       # where "offset" is a per-platform constant.
     }:
     assert builtins.match "^([A-Za-z][A-Za-z0-9_]*\\.)*[A-Za-z][A-Za-z0-9_]*$" applicationId != null;
-    impl.buildApp {
+    nixpkgs.lib.makeOverridable impl.buildApp {
       inherit package
+              acceptAndroidSdkLicenses
               executableName
               applicationId
               displayName
@@ -106,6 +111,7 @@ in rec {
               resources
               assets
               iconPath
+              activityAttributes
               permissions
               services
               intentFilters

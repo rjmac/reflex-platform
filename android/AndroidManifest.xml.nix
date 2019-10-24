@@ -1,4 +1,5 @@
 { applicationId
+, activityAttributes
 , version
 , iconPath
 , intentFilters
@@ -18,7 +19,9 @@
                   android:label="@string/app_name"
                   android:configChanges="orientation|screenSize"
                   android:screenOrientation="portrait"
-                  android:windowSoftInputMode="adjustResize">
+                  android:windowSoftInputMode="adjustResize"
+                  ${activityAttributes}
+                  >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -27,7 +30,6 @@
         </activity>
         ${services}
     </application>
-    <uses-sdk android:minSdkVersion="25" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CAMERA" />
     ${permissions}

@@ -1,50 +1,28 @@
-{ haskellLib, fetchFromGitHub }:
+{ lib, haskellLib, fetchFromGitHub, fetchpatch, versionWildcard, hackGet }:
+
+with lib;
+with haskellLib;
 
 self: super: {
-  text = self.callCabal2nix "text" (fetchFromGitHub {
-    owner = "luigy";
-    repo = "text";
-    rev = "6cc95ebb07c07001666d84ace5c13caefaaa0cad";
-    sha256 = "1zplzy9mfpwjrk5l22gmla1vmk7wmwmgmjfk64b57ysn7madlv19";
-  }) {};
-  jsaddle = haskellLib.overrideCabal super.jsaddle (drv: {
-    patches = (drv.patches or []) ++ [
-      ./jsaddle-text-jsstring.patch
-    ];
+  _dep = super._dep or {} // {
+    ghcjsBaseTextJSStringSrc = self._dep.ghcjsBaseSrc.overrideAttrs (drv: {
+      outputHash = "0l7xadhcmc8wg9l6p91gi1a5bjbil8gqmd7jkx2758b73y8faxzi";
+      postFetch = (drv.postFetch or "") + ''
+        ( cd $out
+          patch -p1 < ${./ghcjs-base-text-jsstring.patch}
+        )
+      '';
+    });
+  };
+
+  jsaddle = overrideCabal super.jsaddle (drv: {
     buildDepends = (drv.buildDepends or []) ++ [
-      self.ghcjs-json
       self.ghcjs-base
       self.ghcjs-prim
     ];
   });
-  ghcjs-json = self.callCabal2nix "ghcjs-json" (fetchFromGitHub {
-    owner = "obsidiansystems";
-    repo = "ghcjs-json";
-    rev = "3a6e1e949aced800d32e0683a107f5387295f3a6";
-    sha256 = "1pjsvyvy6ac3358db19iwgbmsmm0si2hzh2ja1hclq43q6d80yij";
-  }) {};
-  ghcjs-base = haskellLib.overrideCabal super.ghcjs-base (drv: {
-    src = fetchFromGitHub {
-      owner = "luigy";
-      repo = "ghcjs-base";
-      rev = "e287c5752064a2d3b2c4776a1520e4b0189881b0";
-      sha256 = "01k7wj60gmmf9larjm3gqbsyxwb5xhqr4dyz4xswy78ql845qljd";
-    };
-    libraryHaskellDepends = with self; [
-      base bytestring containers deepseq dlist ghc-prim
-      ghcjs-prim integer-gmp primitive time
-      transformers vector
-    ];
-  });
-  attoparsec = haskellLib.overrideCabal super.attoparsec (drv: {
-    src = fetchFromGitHub {
-      owner = "luigy";
-      repo = "attoparsec";
-      rev = "e766a754811042f061b6b4498137d2ad28e207a8";
-      sha256 = "106fn187hw9z3bidbkp7r4wafmhk7g2iv2k0hybirv63f8727x3x";
-    };
-  });
-  buffer-builder = haskellLib.overrideCabal super.buffer-builder (drv: {
+  attoparsec = dontCheck (self.callCabal2nix "attoparsec" (hackGet ./dep/attoparsec) {});
+  buffer-builder = overrideCabal super.buffer-builder (drv: {
     doCheck = false;
     src = fetchFromGitHub {
       owner = "obsidiansystems";
@@ -53,21 +31,20 @@ self: super: {
       sha256 = "18dd2ydva3hnsfyrzmi3y3r41g2l4r0kfijaan85y6rc507k6x5c";
     };
   });
-  hashable = haskellLib.addBuildDepend (self.callCabal2nix "hashable" (fetchFromGitHub {
-    owner = "luigy";
-    repo = "hashable";
-    rev = "97a6fc77b028b4b3a7310a5c2897b8611e518870";
-    sha256 = "1rl55p5y0mm8a7hxlfzhhgnnciw2h63ilxdaag3h7ypdx4bfd6rs";
-  }) {}) self.text;
-  conduit-extra = haskellLib.overrideCabal super.conduit-extra (drv: {
-    src = "${fetchFromGitHub {
-      owner = "luigy";
-      repo = "conduit";
-      rev = "aeb20e4eb7f7bfc07ec401c82821cbb04018b571";
-      sha256 = "10kz2m2yxyhk46xdglj7wdn5ba2swqzhyznxasj0jvnjcnv3jriw";
-    }}/conduit-extra";
+  hashable = overrideCabal super.hashable (drv: {
+    revision = null;
+    editedCabalFile = null;
+    jailbreak = true;
+    doCheck = false;
+    libraryHaskellDepends = (drv.libraryHaskellDepends or []) ++ [
+      self.text
+    ];
+    patches = (drv.patches or []) ++ [
+      ./hashable.patch
+    ];
   });
-  double-conversion = haskellLib.overrideCabal super.double-conversion (drv: {
+  conduit-extra = dontCheck (appendPatch super.conduit-extra ./conduit-extra-text-jsstring.patch);
+  double-conversion = overrideCabal super.double-conversion (drv: {
     src = fetchFromGitHub {
       owner = "obsidiansystems";
       repo = "double-conversion";
@@ -75,12 +52,13 @@ self: super: {
       sha256 = "0sjljf1sbwalw1zycpjf6bqhljag9i1k77b18b0fd1pzrc29wnks";
     };
   });
-  say = haskellLib.overrideCabal super.say (drv: {
+  say = overrideCabal super.say (drv: {
     patches = (drv.patches or []) ++ [
-      ./say-text-jsstring.patch
+      ./say.patch
     ];
     buildDepends = (drv.buildDepends or []) ++ [
       self.ghcjs-base
     ];
   });
+  aeson = self.callPackage (hackGet ./dep/aeson) {};
 }

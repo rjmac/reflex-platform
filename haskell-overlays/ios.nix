@@ -1,11 +1,7 @@
-{ haskellLib }:
+{ haskellLib, lib }:
 
 self: super: {
   ghcjs-prim = null;
-  ghcjs-json = null;
-  derive = null;
-  focus-http-th = null;
-  th-lift-instances = null;
   websockets = null;
   wai = null;
   warp = null;
@@ -13,6 +9,15 @@ self: super: {
 
   cabal-doctest = null;
   syb = haskellLib.overrideCabal super.syb (drv: { jailbreak = true; });
+
+  # HACK(matthewbauer):
+  # Temporary fix for https://github.com/ekmett/free/issues/176
+  # Optimizations are broken on some ARM-based systems for some reason.
+  free = haskellLib.appendConfigureFlag super.free "--enable-optimization=0";
+  jsaddle = haskellLib.appendConfigureFlag super.jsaddle "--enable-optimization=0";
+
+  blaze-textual = haskellLib.enableCabalFlag super.blaze-textual "integer-simple";
+  cryptonite = haskellLib.disableCabalFlag super.cryptonite "integer-gmp";
 
   reflex-todomvc = haskellLib.overrideCabal super.reflex-todomvc (drv: {
     postFixup = ''

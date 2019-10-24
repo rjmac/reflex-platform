@@ -4,6 +4,7 @@ let overrideAndroidCabal = package: overrideCabal package (drv: {
         sed -i 's%^executable *\(.*\)$%executable lib\1.so\n  cc-options: -shared -fPIC\n  ld-options: -shared -Wl,--gc-sections,--version-script=${./haskellActivity.version},-u,Java_systems_obsidian_HaskellActivity_haskellStartMain,-u,hs_main\n  ghc-options: -shared -fPIC -threaded -no-hs-main -lHSrts_thr -lCffi -lm -llog%i' *.cabal
       '';
     });
+    androidenv = nixpkgs.androidenv;
     #TODO: Keep the signing key for dev mode more consistent, e.g. in ~/.config/reflex-platform, so that the app can be reinstalled in-place
     addDeployScript = src: nixpkgs.runCommand "android-app" {
       inherit src;
@@ -11,19 +12,22 @@ let overrideAndroidCabal = package: overrideCabal package (drv: {
         mkdir -p "$out/bin"
         cp -r "$src"/* "$out"
         cat >"$out/bin/deploy" <<EOF
-          $(which adb) install -r "$(echo $out/*.apk)"
+        #!/usr/bin/env bash
+        $(command -v adb) install -r "$(echo $out/*.apk)"
         EOF
         chmod +x "$out/bin/deploy"
       '';
-      buildInputs = with nixpkgs; [
-        androidsdk
-        which
-      ];
+      buildInputs = [ androidenv.androidPkgs_9_0.androidsdk ];
     } "";
+    buildGradleApp = import ./build-gradle-app.nix {
+      inherit (nixpkgs) stdenv jdk gnumake gawk file runCommand
+                     which gradle fetchurl buildEnv;
+      inherit androidenv;
+    };
     inherit (nixpkgs.lib) splitString escapeShellArg mapAttrs attrNames concatStrings optionalString;
 in {
-  buildApp = args: with args; addDeployScript (nixpkgs.androidenv.buildGradleApp {
-    acceptAndroidSdkLicenses = true;
+  buildApp = args: with args; addDeployScript (buildGradleApp {
+    inherit acceptAndroidSdkLicenses;
     buildDirectory = "./.";
     # Can be "assembleRelease" or "assembleDebug" (to build release or debug) or "assemble" (to build both)
     gradleTask = if releaseKey == null
@@ -35,21 +39,20 @@ in {
     keyStorePassword = releaseKey.storePassword or null;
     mavenDeps = import ./defaults/deps.nix;
     name = applicationId;
-    platformVersions = [ "26" ];
+    platformVersions = [ "28" ];
     release = false;
     src =
       let splitApplicationId = splitString "." applicationId;
           appSOs = mapAttrs (abiVersion: { myNixpkgs, myHaskellPackages }: {
-            inherit (myNixpkgs) libiconv;
             hsApp = overrideAndroidCabal (package myHaskellPackages);
           }) {
             "arm64-v8a" = {
-              myNixpkgs = nixpkgsCross.android.arm64Impure;
-              myHaskellPackages = ghcAndroidArm64;
+              myNixpkgs = nixpkgsCross.android.aarch64;
+              myHaskellPackages = ghcAndroidAarch64;
             };
             "armeabi-v7a" = {
-              myNixpkgs = nixpkgsCross.android.armv7aImpure;
-              myHaskellPackages = ghcAndroidArmv7a;
+              myNixpkgs = nixpkgsCross.android.aarch32;
+              myHaskellPackages = ghcAndroidAarch32;
             };
           };
           abiVersions = attrNames appSOs;
@@ -62,7 +65,7 @@ in {
             "apply plugin: 'com.google.gms.google-services'";
         });
         androidManifestXml = builtins.toFile "AndroidManifest.xml" (import ./AndroidManifest.xml.nix {
-          inherit applicationId version iconPath intentFilters services permissions;
+          inherit applicationId version iconPath intentFilters services permissions activityAttributes;
         });
         stringsXml = builtins.toFile "strings.xml" (import ./strings.xml.nix {
           inherit displayName;
@@ -73,8 +76,8 @@ in {
         javaSrc = nixpkgs.buildEnv {
           name = applicationId + "-java";
           paths = [
-            (ghcAndroidArm64.android-activity.src + "/java") #TODO: Use output, not src
-            (ghcAndroidArm64.reflex-dom.src + "/java")
+            (ghcAndroidAarch64.android-activity.src + "/java") #TODO: Use output, not src
+            (ghcAndroidAarch64.reflex-dom.src + "/java")
           ];
         };
         src = ./src;
@@ -92,15 +95,11 @@ in {
           ln -s "$applicationMk" "$out/jni/Application.mk"
 
         '' + concatStrings (builtins.map (arch:
-          let inherit (appSOs.${arch}) libiconv hsApp;
+          let inherit (appSOs.${arch}) hsApp;
           in ''
             {
               ARCH_LIB=$out/lib/${arch}
               mkdir -p $ARCH_LIB
-
-              # Move libiconv (per arch) to the correct place
-              cp --no-preserve=mode "${libiconv}/lib/libiconv.so" "$ARCH_LIB"
-              cp --no-preserve=mode "${libiconv}/lib/libcharset.so" "$ARCH_LIB"
 
               local exe="${hsApp}/bin/lib${executableName}.so"
               if [ ! -f "$exe" ] ; then
@@ -115,7 +114,7 @@ in {
           [ -d "$out/assets" ]
           [ -d "$out/res" ]
         '');
-    useExtraSupportLibs = true; #TODO: Should this be enabled by default?
+    useGooglePlayServices = true; # TODO: Should this be enabled by default?
     useGoogleAPIs = true; #TODO: Should this be enabled by default?
 
     # We use the NDK build process
